@@ -93,7 +93,7 @@ jobs:
                 exit 1
             }
             $logs = "buildkit/logs"
-            $cni = "${{ github.workspace }}\buildkit\cni"
+            $cni = "$env:ProgramFiles\containerd\cni"
             $droot = "${{ github.workspace }}\droot"
             Start-Job -ScriptBlock {
                 param($logs, $droot)
@@ -107,8 +107,8 @@ jobs:
             Start-Job -ScriptBlock {
               param($logs, $cni, $droot)
               Start-Process buildkitd.exe `
-              -ArgumentList @("--containerd-cni-config-path=$cni\0-containerd-nat.conf",
-                              "--containerd-cni-binary-dir=$cni", `
+              -ArgumentList @("--containerd-cni-config-path=$cni\conf\0-containerd-nat.conf",
+                              "--containerd-cni-binary-dir=$cni\bin", `
                               "--root=$droot\buildkitd") `
               -RedirectStandardOutput "$logs/buildkitd.log" `
               -RedirectStandardError "$logs/buildkitd_error.log" `
