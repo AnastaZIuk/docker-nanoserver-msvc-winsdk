@@ -135,8 +135,6 @@ jobs:
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/app ^
               --opt target=nano
 
-      - uses: fawazahmed0/action-debug-vscode@main
-
       - name: C++ Build & Test in Nano Container
         shell: pwsh
         run: |
@@ -186,8 +184,6 @@ jobs:
         shell: pwsh
         run: |
           buildctl prune
-
-      - uses: fawazahmed0/action-debug-vscode@main
           
       - name: Stop daemons
         shell: pwsh
