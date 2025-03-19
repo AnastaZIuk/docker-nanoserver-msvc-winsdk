@@ -110,10 +110,16 @@ jobs:
         run: |
             buildctl build --progress plain --frontend=dockerfile.v0 --local context=. --local dockerfile=. ^
               --output=type=image,name=dr-private.devsh.eu/actions/cache/nano/app,push=true ^
+              --output=type=docker,name=app,dest=app.tar ^
               --export-cache=type=inline ^
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/base ^
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/app ^
               --opt target=nano
+
+      - name: Import docker tarball
+        shell: cmd
+        run: |
+            docker import -i app.tar
 
       - name: C++ Build & Test in Nano Container
         shell: pwsh
@@ -128,11 +134,11 @@ jobs:
                 )
             
                 Write-Host $Message
-            
-                ctr --namespace buildkit run --rm --cni --privileged --cwd "C:\mnt\tests" `
-                    --mount "src=${{ github.workspace }},dst=C:\mnt" `
-                    dr-private.devsh.eu/actions/cache/nano/app nano cmd /c $Command
-            
+
+                docker run --rm --name nano -w "C:\app\tests" ` 
+                  -v "${{ github.workspace }}:C:\mnt" app:latest `
+                  cmd /c $Command
+                
                 if ($LASTEXITCODE -ne 0) {
                     Write-Host "❌ $ErrorMessage"
                     exit 1
