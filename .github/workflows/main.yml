@@ -119,7 +119,7 @@ jobs:
       - name: Build base image
         shell: cmd
         run: |
-            buildctl build --frontend=dockerfile.v0 --local context=. --local dockerfile=. ^
+            buildctl build --progress plain --frontend=dockerfile.v0 --local context=. --local dockerfile=. ^
               --output=type=image,name=dr-private.devsh.eu/actions/cache/nano/base,push=true ^
               --export-cache=type=inline ^
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/base ^
@@ -128,7 +128,7 @@ jobs:
       - name: Build app image
         shell: cmd
         run: |
-            buildctl build --frontend=dockerfile.v0 --local context=. --local dockerfile=. ^
+            buildctl build --progress plain --frontend=dockerfile.v0 --local context=. --local dockerfile=. ^
               --output=type=image,name=dr-private.devsh.eu/actions/cache/nano/app,push=true ^
               --export-cache=type=inline ^
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/base ^
