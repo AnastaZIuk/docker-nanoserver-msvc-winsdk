@@ -17,77 +17,158 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Restore Cached WSL Kernel & VHDX
+      - name: Setup environment
+        shell: pwsh
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true   
+      - name: Restore BuildKit Cache
         uses: actions/cache/restore@v4
-        id: restore-wsl
+        id: restore-buildkit-cache
         with:
           path: |
-            linux/bzImage
-            linux/ext4.vhdx
-            linux/wsl.msi
-          key: wsl-files-${{ runner.os }}-
+            buildkit
+          key: buildkit-${{ runner.os }}-
           restore-keys: |
-            wsl-files-${{ runner.os }}-
+            buildkit-${{ runner.os }}-
+      - name: Restore Daemon Cache
+        uses: actions/cache/restore@v4
+        id: restore-droot-cache
+        with:
+          path: |
+            droot
+          key: droot-${{ runner.os }}-
+          restore-keys: |
+            droot-${{ runner.os }}-
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: dr-private.devsh.eu
+          username: ${{ secrets.DOCKER_USERNAME  }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Configure WSL
+      - name: Setup buildkit
         shell: pwsh
         run: |
-          wsl/setup-wsl.ps1
-
-      - name: Build docker image, cache to local registry
-        if: env.REGISTRY_CACHE_HIT != 'true'
+            if (-Not (Test-Path "buildkit")) {
+                Write-Host "📂 'buildkit' directory not found. Downloading and extracting daemons..."
+                New-Item -ItemType Directory -Path "buildkit" -Force
+                Invoke-WebRequest -Uri "https://github.com/moby/buildkit/releases/download/v0.20.1/buildkit-v0.20.1.windows-amd64.tar.gz" -OutFile "buildkit.tar.gz"
+                tar -xf buildkit.tar.gz -C buildkit
+                
+                Invoke-WebRequest -Uri "https://github.com/containerd/containerd/releases/download/v2.0.4/containerd-2.0.4-windows-amd64.tar.gz" -OutFile "containerd.tar.gz"
+                tar -xf containerd.tar.gz -C buildkit
+            } else {
+                Write-Host "✅ 'buildkit' directory already exists. Skipping download."
+            }
+            .\cni\setup-nat.ps1
+            New-Item -ItemType Directory -Path "buildkit/logs" -Force
+            $Bin = "${{ github.workspace }}\buildkit\bin"
+            echo "PATH=$Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Run daemons
         shell: pwsh
-        run: |
-          docker build -t app:latest .
-          docker tag app:latest localhost:5000/app:latest
-          wsl dockerd &> dockerd-logfile &
-          wsl/wait-for-daemon.ps1
-          wsl docker run --rm -d -p 5000:5000 --name registry -e REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/registry-data -v "/registry-data:/registry-data" registry:2.8.3
-          Invoke-RestMethod -Uri "http://localhost:5000/v2/_catalog" -TimeoutSec 15 | ConvertTo-Json
-          docker push localhost:5000/app
-
-      - name: Pull cached docker image from local registry
-        if: env.REGISTRY_CACHE_HIT == 'true'
-        shell: pwsh
-        run: |
-          wsl dockerd &> dockerd-logfile &
-          wsl/wait-for-daemon.ps1
-          wsl docker run --rm -d -p 5000:5000 --name registry -e REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/registry-data -v "/registry-data:/registry-data" registry:2.8.3
-          Invoke-RestMethod -Uri "http://localhost:5000/v2/_catalog" -TimeoutSec 15 | ConvertTo-Json
-          docker pull localhost:5000/app
-          docker tag localhost:5000/app app:latest
+        run: |    
+            function Wait-For {
+                param (
+                    [string]$Command,          
+                    [int]$TickWait = 1,    
+                    [int]$TotalTicks = 5 
+                )
           
-      - name: Run Nano Container
+                Write-Host "⏳ Waiting for command.. (Max retries: $TotalTicks, Interval: ${TickWait}s)"
+                
+                for ($i=1; $i -le $TotalTicks; $i++) {
+                    Write-Host "⏳ [$i/$TotalTicks]: $Command"
+                    if (Invoke-Expression $Command) {
+                        Write-Host "✅ Success!"
+                        return $true
+                    }
+                    Start-Sleep -Seconds $TickWait
+                }
+          
+                Write-Error "❌ Timeout: $Command did not succeed!"
+                exit 1
+            }
+            $logs = "buildkit/logs"
+            $cni = "${{ github.workspace }}\buildkit\cni"
+            $droot = "${{ github.workspace }}\droot"
+            Start-Job -ScriptBlock {
+                param($logs, $droot)
+                Start-Process containerd.exe `
+                -ArgumentList @("--root=$droot\containerd") `
+                  -RedirectStandardOutput "$logs/containerd.log" `
+                  -RedirectStandardError "$logs/containerd_error.log" `
+                  -NoNewWindow -PassThru
+            } -ArgumentList $logs, $droot
+            Wait-For "ctr --namespace buildkit image ls"
+            Start-Job -ScriptBlock {
+              param($logs, $cni, $droot)
+              Start-Process buildkitd.exe `
+              -ArgumentList @("--containerd-cni-config-path=$cni\0-containerd-nat.conf",
+                              "--containerd-cni-binary-dir=$cni", `
+                              "--root=$droot\buildkitd") `
+              -RedirectStandardOutput "$logs/buildkitd.log" `
+              -RedirectStandardError "$logs/buildkitd_error.log" `
+              -NoNewWindow -PassThru
+              } -ArgumentList $logs, $cni, $droot
+            Wait-For "buildctl du"
+      - name: Build base image
+        shell: cmd
+        run: |
+            buildctl build --frontend=dockerfile.v0 --local context=. --local dockerfile=. ^
+              --output=type=image,name=dr-private.devsh.eu/actions/cache/nano/base,push=true ^
+              --export-cache=type=inline ^
+              --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/base ^
+              --opt target=buildtools
+      - name: Prune images
         shell: pwsh
         run: |
-          docker run -di --name orphan -v "${{ github.workspace }}:C:\app" app:latest
-
-      - name: Nano Container - Configure CMake Project
+          buildctl prune
+      - name: Stop daemons
         shell: pwsh
         run: |
-          docker exec -w "C:\app\tests" -i orphan cmd /c cmake --preset configure-msvc-winsdk
-
-      - name: Nano Container - Build the Project
-        shell: pwsh
-        run: |
-          docker exec -w "C:\app\tests" -i orphan cmd /c cmake --build --preset build-msvc-winsdk --config Release
-
-      - name: Nano Container - Test the Project
-        shell: pwsh
-        run: |
-          docker exec -w "C:\app\tests\build\src" -i orphan cmd /c ctest -C Release --stop-on-failure --verbose
-
-      - name: Shutdown WSL
-        shell: pwsh
-        run: |
-          wsl --shutdown
-
-      - name: Save WSL Kernel & VHDX to Cache
-        id: cache-wsl
+            Write-Host "🔴 Stopping background jobs..."
+            if (Get-Job) {
+                Get-Job | Stop-Job -Force
+                Get-Job | Remove-Job -Force
+                Write-Host "✅ Background jobs stopped!"
+            } else {
+                Write-Host "⚠️ No background jobs found."
+            }
+            Write-Host "🔴 Stopping containerd and buildkitd..."
+            if (Get-Process -Name "containerd" -ErrorAction SilentlyContinue) {
+                Stop-Process -Name "containerd" -Force
+                Write-Host "✅ containerd stopped!"
+            } else {
+                Write-Host "⚠️ containerd is not running."
+            }
+            
+            if (Get-Process -Name "buildkitd" -ErrorAction SilentlyContinue) {
+                Stop-Process -Name "buildkitd" -Force
+                Write-Host "✅ buildkitd stopped!"
+            } else {
+                Write-Host "⚠️ buildkitd is not running."
+            }
+      #- name: Build app image
+      #  shell: cmd
+      #  run: |
+      #      buildctl build --frontend=dockerfile.v0 --local context=. --local dockerfile=. ^            
+      #        --output type=image,name=nano/app,push=false ^
+      #        --export-cache type=local,dest=buildkit/.cache,mode=max ^
+      #        --import-cache type=local,src=buildkit/.cache ^
+      #        --opt target=nano
+            
+      - name: Save BuildKit Cache
+        id: save-buildkit-cache
         uses: actions/cache/save@v4
         with:
           path: |
-            linux/bzImage
-            linux/ext4.vhdx
-            linux/wsl.msi
-          key: wsl-files-${{ runner.os }}-
+            buildkit
+          key: buildkit-${{ runner.os }}-
+          
+      - name: Save Daemon Cache
+        id: save-droot-cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            droot
+          key: droot-${{ runner.os }}-
