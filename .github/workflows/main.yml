@@ -49,6 +49,8 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME  }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - uses: fawazahmed0/action-debug-vscode@main
+
       - name: Setup buildkit
         shell: pwsh
         run: |
