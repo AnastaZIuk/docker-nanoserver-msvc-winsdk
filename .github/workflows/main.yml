@@ -21,6 +21,8 @@ jobs:
         shell: pwsh
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - uses: fawazahmed0/action-debug-vscode@main
           
       - name: Restore BuildKit Cache
         uses: actions/cache/restore@v4
