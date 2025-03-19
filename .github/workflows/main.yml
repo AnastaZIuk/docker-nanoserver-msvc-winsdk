@@ -116,10 +116,10 @@ jobs:
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/app ^
               --opt target=nano
 
-      - name: Import docker tarball
+      - name: Load docker tarball
         shell: cmd
         run: |
-            docker import -i app.tar
+            docker load -i app.tar
 
       - name: C++ Build & Test in Nano Container
         shell: pwsh
