@@ -1,7 +1,6 @@
 # escape=`
 
 FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS buildtools
-USER ContainerAdministrator
 
 ARG WINDOWS_11_SDK_VERSION="22621"
 ARG VC_VERSION="14.42.17.12"
@@ -27,7 +26,6 @@ echo "Error: Expected MSVC version directory %MSVC_VERSION% does not exist!" && 
 RUN (echo { "WINDOWS_SDK_VERSION": "10.0.%WINDOWS_11_SDK_VERSION%.0", "VC_VERSION": "%VC_VERSION%", "MSVC_VERSION": "%MSVC_VERSION%" }) > %BUILD_TOOLS_DIR%\env.json
 
 FROM mcr.microsoft.com/windows/nanoserver:ltsc2022 AS nano
-USER ContainerAdministrator
 
 ARG BUILD_TOOLS_DIR="C:\BuildTools"
 ENV CMAKE_WINDOWS_KITS_10_DIR=${BUILD_TOOLS_DIR} BUILD_TOOLS_DIR=${BUILD_TOOLS_DIR}
@@ -51,6 +49,8 @@ RUN mkdir C:\Temp && cd C:\Temp && mkdir "%CMAKE_DIR%" && curl -SL --output cmak
 RUN cd C:\Temp && mkdir "%PYTHON_DIR%" && curl -SL --output python.zip %PYTHON_URL% && tar -xf python.zip -C "%PYTHON_DIR%" && del python.zip
 RUN cd C:\Temp && mkdir "%NINJA_DIR%" && curl -SL --output ninja.zip %NINJA_URL% && tar -xf ninja.zip -C "%NINJA_DIR%" && del ninja.zip
 RUN cd C:\Temp && mkdir "%NASM_DIR%" && curl -SL --output nasm.zip %NASM_URL% && tar -xf nasm.zip -C "%NASM_DIR%" && del nasm.zip
+
+USER ContainerAdministrator
 
 RUN cd %BUILD_TOOLS_DIR% && "%PYTHON_DIR%\python.exe" -c "import json, os; env=json.load(open('./env.json')); [os.system(f'setx {k} \"{v}\"') for k,v in env.items()]" `
 && setx MSVC_TOOLSET_DIR "%BUILD_TOOLS_DIR%\VC\Tools\MSVC\%MSVC_VERSION%"
