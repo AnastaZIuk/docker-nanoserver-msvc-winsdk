@@ -129,6 +129,11 @@ jobs:
             "$img" "$app" cmd /C curl -I example.com
           Check-ExitCode "Pre-run snapshot container failed!"
 
+      - uses: fawazahmed0/action-debug-vscode@main
+
+      - name: C++ 2 Build & Test in Nano Container
+        shell: pwsh
+        run: |
           Write-Host "⏳ Running app container.."
           ctr --namespace buildkit run -d -t --cni --privileged `
             --mount "src=${{ github.workspace }},dst=$dst" `
