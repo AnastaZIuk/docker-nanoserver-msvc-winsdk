@@ -134,7 +134,34 @@ jobs:
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/base ^
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/app ^
               --opt target=nano
-              
+
+      - name: C++ Build & Test in Nano Container
+        shell: pwsh
+        run: |
+          $dst = "C:\mnt"
+          $app = "nano"
+
+          Write-Host "⏳ Running container.."
+          ctr --namespace buildkit run --rm -d -t --cni --privileged `
+            --mount src=${{ github.workspace }},dst=$dst `
+            dr-private.devsh.eu/actions/cache/nano/app $app cmd
+          Write-Host "✅ Success!"
+
+          Write-Host "⏳ Container: CMake Configure.."
+          ctr --namespace buildkit task exec --exec-id cmake-configure --cwd "$dst\tests" $app `
+            cmd /c cmake --preset configure-msvc-winsdk
+          Write-Host "✅ Success!"
+
+          Write-Host "⏳ Container: CMake Build.."
+          ctr --namespace buildkit task exec --exec-id cmake-build --cwd "$dst\tests" $app `
+            cmd /c cmake --build --preset build-msvc-winsdk --config Release
+          Write-Host "✅ Success!"
+
+          Write-Host "⏳ Container: CMake Test.."
+          ctr --namespace buildkit task exec --exec-id cmake-test $app `
+            cmd /c ctest --test-dir "$dst\tests\build-ct\src" -C Release --stop-on-failure --verbose
+          Write-Host "✅ Success!"
+ 
       - name: Prune images
         shell: pwsh
         run: |
