@@ -12,20 +12,26 @@ $subnet = $natInfo.Subnets[0].AddressPrefix
 $cniVersion = "1.0.0"
 $cniPluginVersion = "0.3.1"
 
-$cniConfPath = "$env:ProgramFiles\containerd\cni\conf\0-containerd-nat.conf"
-$cniBinDir = "$env:ProgramFiles\containerd\cni\bin"
+$cnivurl = "windows-container-networking-cni-amd64-v$cniPluginVersion.zip"
+$cniDir = "$env:ProgramFiles\containerd\cni"
 
-$zipcni = "windows-container-networking-cni-amd64-v$cniPluginVersion.zip"
+$cache = "$workspaceDir\buildkit\$cnivurl"
+$cniConfDir = "$cniDir\conf"
+$cniBinDir = "$cniDir\bin"
 
-if (-Not (Test-Path "$zipcni")) {
-    Write-Host "📂 'cni' directory not found. Downloading and extracting cni binaries..."
-    curl.exe -LO https://github.com/microsoft/windows-container-networking/releases/download/v$cniPluginVersion/$zipcni
+$cniConfPath = "$cniConfDir\0-containerd-nat.conf"
+$url = "https://github.com/microsoft/windows-container-networking/releases/download/v$cniPluginVersion/$cnivurl"
+
+if (-Not (Test-Path "$cache")) {
+    Write-Host "📂 '$cnivurl' file not found. Downloading and extracting cni binaries..."
+    Invoke-WebRequest -Uri "$url" -OutFile "$cache"
 } else {
     Write-Host "✅ 'cni' directory already exists. Skipping download."
 }
 
-mkdir $cniBinDir -Force
-Expand-Archive -Path $zipcni -DestinationPath $cniBinDir -Force
+New-Item -ItemType Directory -Path "$cniConfDir" -Force
+New-Item -ItemType Directory -Path "$cniBinDir" -Force
+Expand-Archive -Path "$cache" -DestinationPath "$cniBinDir" -Force
 
 $natConfig = @"
 {
