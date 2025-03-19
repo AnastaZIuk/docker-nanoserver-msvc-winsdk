@@ -139,6 +139,8 @@ jobs:
         shell: pwsh
         run: |
           buildctl prune
+
+      - uses: fawazahmed0/action-debug-vscode@main
           
       - name: Stop daemons
         shell: pwsh
