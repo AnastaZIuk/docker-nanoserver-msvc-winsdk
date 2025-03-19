@@ -123,17 +123,15 @@ jobs:
           $app = "nano"
           $img = "dr-private.devsh.eu/actions/cache/nano/app"
 
+          ctr --namespace buildkit task kill -s KILL nano -ErrorAction SilentlyContinue
+          ctr --namespace buildkit c rm nano -ErrorAction SilentlyContinue
+
           Write-Host "⏳ Snapshot creation pre-run & CNI test.."
           ctr --namespace buildkit run --rm --cni --privileged `
             --mount "src=${{ github.workspace }},dst=$dst" `
-            "$img" "$app" cmd /C curl -I example.com
+            "$img" cni cmd /C curl -I example.com
           Check-ExitCode "Pre-run snapshot container failed!"
 
-      - uses: fawazahmed0/action-debug-vscode@main
-
-      - name: C++ 2 Build & Test in Nano Container
-        shell: pwsh
-        run: |
           Write-Host "⏳ Running app container.."
           ctr --namespace buildkit run -d -t --cni --privileged `
             --mount "src=${{ github.workspace }},dst=$dst" `
