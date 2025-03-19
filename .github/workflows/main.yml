@@ -138,6 +138,17 @@ jobs:
       - name: C++ Build & Test in Nano Container
         shell: pwsh
         run: |
+          function Check-ExitCode {
+            param (
+              [string]$message
+            )
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "❌ ERROR: $message (Exit Code: $LASTEXITCODE)"
+              exit $LASTEXITCODE
+            }
+            Write-Host "✅ Success!"
+          }
+
           $dst = "C:\mnt"
           $app = "nano"
 
@@ -145,28 +156,28 @@ jobs:
           ctr --namespace buildkit run --rm --cni --privileged `
             --mount src=${{ github.workspace }},dst=$dst `
             dr-private.devsh.eu/actions/cache/nano/app $app cmd /C curl -I example.com
-          Write-Host "✅ Success!"
+          Check-ExitCode "Pre-run container failed!"
 
           Write-Host "⏳ Running app container.."
           ctr --namespace buildkit run --rm -d -t --cni --privileged `
             --mount src=${{ github.workspace }},dst=$dst `
             dr-private.devsh.eu/actions/cache/nano/app $app cmd
-          Write-Host "✅ Success!"
+          Check-ExitCode "Failed to run app container!"
 
           Write-Host "⏳ Container: CMake Configure.."
           ctr --namespace buildkit task exec --exec-id cmake-configure --cwd "$dst\tests" $app `
             cmd /c cmake --preset configure-msvc-winsdk
-          Write-Host "✅ Success!"
+          Check-ExitCode "Failed to configure CMake project in the container!"
 
           Write-Host "⏳ Container: CMake Build.."
           ctr --namespace buildkit task exec --exec-id cmake-build --cwd "$dst\tests" $app `
             cmd /c cmake --build --preset build-msvc-winsdk --config Release
-          Write-Host "✅ Success!"
+          Check-ExitCode "Failed to build CMake project in the container!"
 
           Write-Host "⏳ Container: CMake Test.."
           ctr --namespace buildkit task exec --exec-id cmake-test $app `
             cmd /c ctest --test-dir "$dst\tests\build-ct\src" -C Release --stop-on-failure --verbose
-          Write-Host "✅ Success!"
+          Check-ExitCode "CMake project's tests failed in the container!"
  
       - name: Prune images
         shell: pwsh
