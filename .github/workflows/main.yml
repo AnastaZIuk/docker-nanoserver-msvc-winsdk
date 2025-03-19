@@ -71,27 +71,7 @@ jobs:
       - name: Run daemons
         shell: pwsh
         run: |    
-            function Wait-For {
-                param (
-                    [string]$Command,          
-                    [int]$TickWait = 1,    
-                    [int]$TotalTicks = 5 
-                )
-          
-                Write-Host "⏳ Waiting for command.. (Max retries: $TotalTicks, Interval: ${TickWait}s)"
-                
-                for ($i=1; $i -le $TotalTicks; $i++) {
-                    Write-Host "⏳ [$i/$TotalTicks]: $Command"
-                    if (Invoke-Expression $Command) {
-                        Write-Host "✅ Success!"
-                        return $true
-                    }
-                    Start-Sleep -Seconds $TickWait
-                }
-          
-                Write-Error "❌ Timeout: $Command did not succeed!"
-                exit 1
-            }
+            . pwsh/utility.ps1
             $logs = "buildkit/logs"
             $cni = "$env:ProgramFiles\containerd\cni"
             $droot = "${{ github.workspace }}\droot"
@@ -138,39 +118,7 @@ jobs:
       - name: C++ Build & Test in Nano Container
         shell: pwsh
         run: |
-          function Check-ExitCode {
-            param (
-              [string]$message
-            )
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "❌ ERROR: $message (Exit Code: $LASTEXITCODE)"
-              exit $LASTEXITCODE
-            }
-            Write-Host "✅ Success!"
-          }
-
-          function Wait-For {
-                param (
-                    [string]$Command,          
-                    [int]$TickWait = 1,    
-                    [int]$TotalTicks = 5 
-                )
-          
-                Write-Host "⏳ Waiting for command.. (Max retries: $TotalTicks, Interval: ${TickWait}s)"
-                
-                for ($i=1; $i -le $TotalTicks; $i++) {
-                    Write-Host "⏳ [$i/$TotalTicks]: $Command"
-                    if (Invoke-Expression $Command) {
-                        Write-Host "✅ Success!"
-                        return $true
-                    }
-                    Start-Sleep -Seconds $TickWait
-                }
-          
-                Write-Error "❌ Timeout: $Command did not succeed!"
-                exit 1
-            }
-
+          . pwsh/utility.ps1
           $dst = "C:\mnt"
           $app = "nano"
           $img = "dr-private.devsh.eu/actions/cache/nano/app"
