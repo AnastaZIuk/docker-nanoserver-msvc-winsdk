@@ -141,7 +141,13 @@ jobs:
           $dst = "C:\mnt"
           $app = "nano"
 
-          Write-Host "⏳ Running container.."
+          Write-Host "⏳ Snapshot pre-run & CNI test.."
+          ctr --namespace buildkit run --rm --cni --privileged `
+            --mount src=${{ github.workspace }},dst=$dst `
+            dr-private.devsh.eu/actions/cache/nano/app $app cmd /C curl -I example.com
+          Write-Host "✅ Success!"
+
+          Write-Host "⏳ Running app container.."
           ctr --namespace buildkit run --rm -d -t --cni --privileged `
             --mount src=${{ github.workspace }},dst=$dst `
             dr-private.devsh.eu/actions/cache/nano/app $app cmd
