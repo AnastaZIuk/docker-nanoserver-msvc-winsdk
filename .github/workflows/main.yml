@@ -131,6 +131,7 @@ jobs:
             buildctl build --frontend=dockerfile.v0 --local context=. --local dockerfile=. ^
               --output=type=image,name=dr-private.devsh.eu/actions/cache/nano/app,push=true ^
               --export-cache=type=inline ^
+              --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/base ^
               --import-cache=type=registry,ref=dr-private.devsh.eu/actions/cache/nano/app ^
               --opt target=nano
               
