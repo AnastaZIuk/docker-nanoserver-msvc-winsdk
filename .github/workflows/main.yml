@@ -154,7 +154,7 @@ jobs:
               "Failed to build CMake project in the container!"
           
           Run-Container-Command "⏳ Container: CMake Test.." `
-              "ctest --test-dir 'C:\mnt\tests\build-ct\src' -C Release --stop-on-failure --verbose" `
+              "ctest --test-dir C:\mnt\tests\build-ct\src -C Release --stop-on-failure --verbose" `
               "CMake project's tests failed in the container!"
               
       - name: Prune images
